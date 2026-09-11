@@ -5,7 +5,7 @@ export type QuestionOrderMode = 'EXACT' | 'RANDOM';
 
 export interface Choice {
   choiceKey: string;
-  choiceOrder: 1 | 2 | 3;
+  choiceOrder: number;
   choiceText: string;
 }
 
@@ -286,7 +286,7 @@ export interface ImportRow_Question {
 export interface ImportRow_Choice {
   question_key: string;
   choice_key: string;
-  choice_order: 1 | 2 | 3;
+  choice_order: number;
   choice_text: string;
 }
 

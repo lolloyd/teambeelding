@@ -127,9 +127,47 @@ export function HostGameSelection() {
     return unsub
   }, [])
 
+  // Ensure user is signed in anonymously if needed
+  const ensureAuthenticated = async () => {
+    if (!user) {
+      await signInAnon()
+    }
+  }
+
+  // Create room from pre-published game
+  const handleCreateRoom = async (gameId: string) => {
+    try {
+      await ensureAuthenticated()
+    } catch {
+      toast('Authentication required to host game.', 'error')
+      return
+    }
+    setCreating(true)
+    try {
+      const fn = httpsCallable<
+        { gameId: string },
+        { roomId: string; roomCode: string }
+      >(functions, 'createRoom')
+
+      const result = await fn({ gameId })
+      const { roomCode } = result.data
+      localStorage.setItem('tb_active_room', roomCode)
+      navigate(`/host/${roomCode}`)
+    } catch (e: unknown) {
+      toast((e as { message?: string }).message ?? 'Failed to create room.', 'error')
+    } finally {
+      setCreating(false)
+    }
+  }
+
   // Create room from custom question list
   const handleCreateRoomFromQuestions = async (title: string, description: string, questions: DeckQuestion[]) => {
-    if (!user) return
+    try {
+      await ensureAuthenticated()
+    } catch {
+      toast('Authentication required to host game.', 'error')
+      return
+    }
     setCreating(true)
     try {
       const fn = httpsCallable<
@@ -177,7 +215,7 @@ export function HostGameSelection() {
 
         const choices: Choice[] = shuffled.map((txt, orderIdx) => ({
           choiceKey: `choice_${orderIdx + 1}`,
-          choiceOrder: (orderIdx + 1) as 1 | 2 | 3,
+          choiceOrder: orderIdx + 1,
           choiceText: txt,
         }))
 
@@ -576,20 +614,22 @@ export function HostGameSelection() {
               <Card
                 key={g.gameId}
                 hoverable
-                onClick={() =>
-                  void handleCreateRoomFromQuestions(
-                    g.title,
-                    g.description || '',
-                    []
-                  )
-                }
-                className="flex items-center justify-between"
+                onClick={() => void handleCreateRoom(g.gameId)}
+                className="flex items-center justify-between cursor-pointer"
               >
                 <div>
                   <div className="font-bold">{g.title}</div>
                   <div className="text-xs text-[var(--text2)]">{g.questionCount} questions</div>
                 </div>
-                <Button size="sm" variant="secondary">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={creating}
+                  onClick={e => {
+                    e.stopPropagation()
+                    void handleCreateRoom(g.gameId)
+                  }}
+                >
                   Host
                 </Button>
               </Card>
