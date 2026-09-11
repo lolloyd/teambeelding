@@ -40,17 +40,6 @@ export function LandingPage() {
       </main>
 
       <div className="flex-1" />
-
-      {/* Footer */}
-      <footer className="text-center py-6 px-4">
-        <Link
-          to="/admin"
-          className="text-xs text-[var(--text2)] hover:text-[var(--accent)] transition-colors"
-          aria-label="Admin portal"
-        >
-          Admin ↗
-        </Link>
-      </footer>
     </div>
   )
 }

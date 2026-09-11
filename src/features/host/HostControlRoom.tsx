@@ -95,8 +95,8 @@ export function HostControlRoom() {
   // Watch answer counts
   useEffect(() => {
     if (!room) return
-    const active = players.filter(p => p.status === 'active' && !p.lateJoiner ||
-      (p.lateJoiner && p.eligibleFromSequenceIndex <= (room.currentSequenceIndex ?? 0)))
+    const active = players.filter(p => p.status === 'active' && (!p.lateJoiner ||
+      (p.lateJoiner && p.eligibleFromSequenceIndex <= (room.currentSequenceIndex ?? 0))))
     // Use lastAnsweredSequenceIndex to detect per-question answers (robust to missed questions)
     const answered = active.filter(p =>
       room.phase === 'QUESTION_CLOSED' || room.phase === 'ANSWER_REVEAL' || room.phase === 'LEADERBOARD'
@@ -106,21 +106,30 @@ export function HostControlRoom() {
   }, [room, players])
 
   // Timer countdown
+  const lastSoundSecRef = useRef<number | null>(null)
+
   useEffect(() => {
-    // Also check question.phase: stale Q1 data has phase=QUESTION_CLOSED and a past closesAt
     if (!question || room?.phase !== 'QUESTION_OPEN' || !question.closesAt || question.phase !== 'QUESTION_OPEN') {
       setRemainingMs(null)
+      lastSoundSecRef.current = null
       return
     }
+
     const tick = () => {
-      const rem = question.closesAt! - Date.now()
-      setRemainingMs(Math.max(0, rem))
-      if (rem <= 5000 && rem > 0 && soundOn) playSound('tick_warning')
+      const rem = Math.max(0, question.closesAt! - Date.now())
+      setRemainingMs(rem)
+
+      const secs = Math.ceil(rem / 1000)
+      if (soundOn && secs <= 5 && secs > 0 && lastSoundSecRef.current !== secs) {
+        lastSoundSecRef.current = secs
+        playSound('tick_warning')
+      }
     }
+
     tick()
-    const interval = setInterval(tick, 250)
+    const interval = setInterval(tick, 100)
     return () => clearInterval(interval)
-  }, [question, room?.phase, soundOn])
+  }, [question?.closesAt, question?.phase, room?.phase, soundOn])
 
   // Auto-close question when timer expires or all active players have answered
   useEffect(() => {
@@ -172,18 +181,18 @@ export function HostControlRoom() {
   if (!room) return null
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--bg)]">
+    <div className="min-h-screen flex flex-col bg-[var(--bg)] text-[var(--text)]">
       {/* Header */}
       <header className="bg-[var(--surface)] border-b border-[var(--border)] px-4 py-3 flex items-center gap-3 flex-wrap">
-        <span className="font-black text-lg">
+        <span className="font-black text-xl tracking-tight">
           <span className="text-[var(--text)]">Team</span>
           <span className="text-[var(--accent)]">BEElding</span>
         </span>
-        <div className="bg-[var(--surface2)] border border-[var(--border)] rounded-lg px-3 py-1 text-sm">
-          Code: <strong className="font-mono tracking-widest text-[var(--accent)]">{room.roomCode}</strong>
+        <div className="bg-[var(--surface2)] border border-[var(--border)] rounded-xl px-3 py-1 text-sm font-semibold">
+          Code: <strong className="font-mono tracking-widest text-[var(--accent)] text-base">{room.roomCode}</strong>
         </div>
-        <span className="text-sm text-[var(--text2)]">
-          <span className="inline-block w-2 h-2 rounded-full bg-[var(--green)] shadow-[0_0_6px_var(--green)] mr-1" />
+        <span className="text-sm font-medium text-[var(--text2)] flex items-center gap-1.5">
+          <span className="inline-block w-2.5 h-2.5 rounded-full bg-[var(--green)] shadow-[0_0_8px_var(--green)]" />
           {room.playerCount} Player{room.playerCount !== 1 ? 's' : ''}
         </span>
         <div className="ml-auto flex items-center gap-2">
@@ -191,7 +200,7 @@ export function HostControlRoom() {
             onClick={toggleSound}
             aria-pressed={soundOn}
             aria-label={soundOn ? 'Mute sounds' : 'Enable sounds'}
-            className="text-xl text-[var(--text2)] hover:text-[var(--text)] transition-colors"
+            className="p-2 rounded-lg bg-[var(--surface2)] hover:bg-[var(--border)] text-xl transition-colors"
             title={soundOn ? 'Sound On' : 'Sound Off'}
           >
             {soundOn ? '🔊' : '🔇'}
@@ -202,58 +211,54 @@ export function HostControlRoom() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Main presentation area */}
-        <main className="flex-1 p-6 overflow-y-auto">
-          {/* Phase badge */}
-          <div className="flex items-center gap-3 mb-4 flex-wrap">
-            <span className="text-xs font-semibold uppercase tracking-wider bg-[var(--surface2)] border border-[var(--border)] px-2 py-1 rounded-full text-[var(--text2)]">
-              {phase}
+        <main className="flex-1 p-6 overflow-y-auto max-w-4xl mx-auto w-full flex flex-col">
+          {/* Phase badge & question index */}
+          <div className="flex items-center justify-between gap-3 mb-6">
+            <span className="text-xs font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-3 py-1 rounded-full">
+              Phase: {phase?.replace('_', ' ')}
             </span>
             {room.currentSequenceIndex >= 0 && (
-              <span className="text-xs text-[var(--text2)]">
-                Q {room.currentSequenceIndex + 1} / {room.totalQuestions}
+              <span className="text-sm font-bold text-[var(--text2)]">
+                Question {room.currentSequenceIndex + 1} of {room.totalQuestions}
               </span>
             )}
           </div>
 
           {/* Lobby */}
           {phase === 'LOBBY' && (
-            <div className="flex flex-col items-center gap-6 py-12">
-              <div className="text-center">
-                <div className="text-7xl font-black font-mono tracking-widest text-[var(--accent)] mb-2">{room.roomCode}</div>
-                <p className="text-[var(--text2)]">Share this code with your players</p>
-                <p className="text-sm text-[var(--text2)] mt-1">Join at your browser → TeamBeelding</p>
+            <div className="flex flex-col items-center justify-center gap-6 py-12 my-auto text-center">
+              <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-8 max-w-md w-full shadow-2xl">
+                <p className="text-sm font-bold uppercase tracking-wider text-[var(--text2)] mb-2">Join Game Code</p>
+                <div className="text-6xl font-black font-mono tracking-widest text-[var(--accent)] mb-4">{room.roomCode}</div>
+                <p className="text-sm text-[var(--text2)]">Players join from any phone or browser.</p>
               </div>
-              <div className="text-4xl font-bold text-[var(--text)]">{room.playerCount} player{room.playerCount !== 1 ? 's' : ''} waiting</div>
+
+              <div className="text-2xl font-bold">{room.playerCount} player{room.playerCount !== 1 ? 's' : ''} in lobby</div>
+
               <Button
                 size="lg"
                 variant="primary"
                 disabled={room.playerCount === 0}
                 loading={actionLoading === 'startGame'}
                 onClick={() => void callFn('startGame', { roomId: room.roomId })}
+                className="text-lg px-8 py-4 shadow-xl shadow-[var(--accent)]/20"
               >
-                🚀 Start Game
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                loading={actionLoading === 'refreshRoomImages'}
-                onClick={() => void callFn('refreshRoomImages', { roomId: room.roomId })}
-                title="Re-sync image URLs from the source game questions (use after re-importing)"
-              >
-                🖼 Refresh Images
+                🚀 Start Game Now
               </Button>
             </div>
           )}
 
           {/* Between questions */}
           {phase === 'BETWEEN_QUESTIONS' && (
-            <div className="flex flex-col items-center gap-6 py-8">
-              <h2 className="text-2xl font-bold">Ready for next question?</h2>
+            <div className="flex flex-col items-center justify-center gap-6 py-12 my-auto text-center">
+              <h2 className="text-3xl font-extrabold">Next Question Ready!</h2>
+              <p className="text-[var(--text2)] max-w-md">Get your players ready on their devices before launching.</p>
               <Button
                 size="lg"
                 variant="primary"
                 loading={actionLoading === 'startQuestion'}
                 onClick={() => void callFn('startQuestion', { roomId: room.roomId })}
+                className="text-lg px-8 py-4"
               >
                 ▶ Start Question {room.currentSequenceIndex + 2}
               </Button>
@@ -262,64 +267,71 @@ export function HostControlRoom() {
 
           {/* Question open / paused / closed */}
           {(phase === 'QUESTION_OPEN' || phase === 'QUESTION_PAUSED' || phase === 'QUESTION_CLOSED') && question && (
-            <div className="flex flex-col gap-5">
-              {/* Timer */}
+            <div className="flex flex-col gap-6">
+              {/* Timer Display */}
               {timerSeconds !== null && (
-                <div className={[
-                  'text-center text-7xl font-black font-mono',
-                  timerSeconds <= 5 ? 'text-[var(--red)] animate-timer-pulse' : timerSeconds <= 10 ? 'text-[var(--yellow)]' : 'text-[var(--text)]',
-                ].join(' ')}
-                  aria-live="polite"
-                  aria-label={`${timerSeconds} seconds remaining`}
-                >
-                  {timerSeconds}
+                <div className="flex justify-center">
+                  <div className={[
+                    'text-6xl font-black font-mono tabular-nums px-8 py-3 rounded-2xl border bg-[var(--surface)] shadow-lg',
+                    timerSeconds <= 5 ? 'text-[var(--red)] border-[var(--red)] animate-pulse' : timerSeconds <= 10 ? 'text-[var(--yellow)] border-[var(--yellow)]' : 'text-[var(--text)] border-[var(--border)]',
+                  ].join(' ')}>
+                    {timerSeconds}s
+                  </div>
                 </div>
               )}
 
-              {/* Question content */}
-              <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[var(--radius)] p-6">
-                {question.gameType === 'GUESS_THE_PICTURE' && question.imageStorageUrl && (
+              {/* Question Card */}
+              <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 sm:p-8 shadow-xl">
+                {question.imageStorageUrl && (
                   <StorageImage
                     storageUrl={question.imageStorageUrl}
                     alt="Question image"
-                    className="max-h-64 mx-auto rounded-xl object-contain mb-4"
+                    className="max-h-72 mx-auto rounded-xl object-contain mb-6 shadow-md"
                   />
                 )}
-                {question.gameType === 'NAME_THE_SONG' && question.lyricExcerpt && (
-                  <blockquote className="italic text-center text-xl text-[var(--text2)] border-l-4 border-[var(--accent)] pl-4 py-2 mb-4">
+                {question.lyricExcerpt && (
+                  <blockquote className="italic text-center text-xl text-[var(--text2)] border-l-4 border-[var(--accent)] pl-4 py-2 mb-6 bg-[var(--surface2)] rounded-r-xl">
                     "{question.lyricExcerpt}"
                   </blockquote>
                 )}
-                <h2 className="text-xl font-bold text-center">{question.prompt}</h2>
-                <div className="grid grid-cols-3 gap-3 mt-4">
+                <h2 className="text-2xl font-bold text-center leading-snug">{question.prompt}</h2>
+
+                {/* Choices Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">
                   {question.choices.map(c => (
-                    <div key={c.choiceKey} className="bg-[var(--surface2)] border border-[var(--border)] rounded-xl p-3 text-center text-sm font-semibold">
+                    <div
+                      key={c.choiceKey}
+                      className="bg-[var(--surface2)] border border-[var(--border)] rounded-xl p-4 text-center text-base font-semibold shadow-sm"
+                    >
                       {c.choiceText}
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Answer progress */}
-              <div className="flex items-center gap-2 text-sm text-[var(--text2)]">
-                <div className="flex-1 h-2 bg-[var(--surface2)] rounded-full overflow-hidden">
+              {/* Response progress */}
+              <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 flex flex-col gap-2">
+                <div className="flex justify-between items-center text-sm font-bold">
+                  <span>Player Responses</span>
+                  <span className="text-[var(--accent)]">{answerCounts.answered} / {answerCounts.total}</span>
+                </div>
+                <div className="w-full h-3 bg-[var(--surface2)] rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-[var(--green)] transition-all"
+                    className="h-full bg-[var(--green)] transition-all duration-300 rounded-full"
                     style={{ width: `${answerCounts.total > 0 ? (answerCounts.answered / answerCounts.total) * 100 : 0}%` }}
                   />
                 </div>
-                <span>{answerCounts.answered}/{answerCounts.total} answered</span>
               </div>
 
-              {/* Controls */}
-              <div className="flex gap-2 flex-wrap">
+              {/* Host Controls */}
+              <div className="flex gap-3 flex-wrap justify-center">
                 {phase === 'QUESTION_OPEN' && (
                   <Button
                     variant="secondary"
                     loading={actionLoading === 'pauseQuestion'}
                     onClick={() => void callFn('pauseQuestion', { roomId: room.roomId })}
                   >
-                    ⏸ Pause
+                    ⏸ Pause Question
                   </Button>
                 )}
                 {phase === 'QUESTION_PAUSED' && (
@@ -328,7 +340,7 @@ export function HostControlRoom() {
                     loading={actionLoading === 'resumeQuestion'}
                     onClick={() => void callFn('resumeQuestion', { roomId: room.roomId })}
                   >
-                    ▶ Resume
+                    ▶ Resume Timer
                   </Button>
                 )}
                 {(phase === 'QUESTION_OPEN' || phase === 'QUESTION_PAUSED') && (
@@ -336,19 +348,21 @@ export function HostControlRoom() {
                     variant="secondary"
                     onClick={() => setConfirmSkipOpen(true)}
                   >
-                    ⏭ Skip
+                    ⏭ Skip Question
                   </Button>
                 )}
                 {phase === 'QUESTION_CLOSED' && (
                   <Button
                     variant="primary"
+                    size="lg"
                     loading={actionLoading === 'revealAnswer'}
                     onClick={() => {
                       void callFn('revealAnswer', { roomId: room.roomId, questionInstanceId: question.questionInstanceId })
                       if (soundOn) playSound('answer_reveal')
                     }}
+                    className="px-8"
                   >
-                    🎯 Reveal Answer
+                    🎯 Reveal Correct Answer
                   </Button>
                 )}
               </div>
@@ -357,46 +371,71 @@ export function HostControlRoom() {
 
           {/* Answer reveal */}
           {phase === 'ANSWER_REVEAL' && question && (
-            <div className="flex flex-col gap-4">
-              <h2 className="text-xl font-bold">Answer Revealed</h2>
-              {question.gameType === 'NAME_THE_SONG' && (
-                <div className="bg-[var(--surface)] border border-[var(--accent)] rounded-[var(--radius)] p-6 text-center">
-                  <div className="text-2xl font-black text-[var(--accent)]">{question.songTitle}</div>
-                  <div className="text-[var(--text2)] mt-1">{question.artist}</div>
-                </div>
-              )}
-              <Button
-                variant="primary"
-                loading={actionLoading === 'showLeaderboard'}
-                onClick={() => {
-                  void callFn('showLeaderboard', { roomId: room.roomId })
-                  if (soundOn) playSound('leaderboard')
-                }}
-              >
-                📊 Show Leaderboard
-              </Button>
+            <div className="flex flex-col gap-6 my-auto">
+              <div className="text-center">
+                <span className="text-sm font-bold uppercase tracking-wider text-[var(--green)]">Correct Answer Revealed</span>
+                <h2 className="text-3xl font-black mt-1">{question.prompt}</h2>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 max-w-xl mx-auto w-full">
+                {question.choices.map(c => {
+                  const isCorrect = question.correctChoiceKey === c.choiceKey
+                  return (
+                    <div
+                      key={c.choiceKey}
+                      className={`p-5 rounded-2xl border-2 font-bold text-lg flex items-center justify-between ${
+                        isCorrect
+                          ? 'bg-green-500/10 border-[var(--green)] text-emerald-300'
+                          : 'bg-[var(--surface2)] border-[var(--border)] text-[var(--text2)] opacity-60'
+                      }`}
+                    >
+                      <span>{c.choiceText}</span>
+                      {isCorrect && <span className="text-2xl">✅</span>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex justify-center mt-4">
+                <Button
+                  variant="primary"
+                  size="lg"
+                  loading={actionLoading === 'showLeaderboard'}
+                  onClick={() => {
+                    void callFn('showLeaderboard', { roomId: room.roomId })
+                    if (soundOn) playSound('leaderboard')
+                  }}
+                  className="px-8 text-lg"
+                >
+                  📊 View Leaderboard
+                </Button>
+              </div>
             </div>
           )}
 
           {/* Leaderboard */}
           {phase === 'LEADERBOARD' && (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-6 my-auto">
               <Leaderboard roomId={room.roomId} currentPlayerUid={null} />
-              <div className="flex gap-2">
+              <div className="flex justify-center gap-3">
                 {room.currentSequenceIndex + 1 < room.totalQuestions ? (
                   <Button
                     variant="primary"
+                    size="lg"
                     loading={actionLoading === 'prepareNextQuestion'}
                     onClick={() => void callFn('prepareNextQuestion', { roomId: room.roomId })}
+                    className="px-8 text-lg"
                   >
                     ➡ Next Question
                   </Button>
                 ) : (
                   <Button
                     variant="primary"
+                    size="lg"
                     onClick={() => setConfirmEndOpen(true)}
+                    className="px-8 text-lg"
                   >
-                    🏁 End Game
+                    🏆 Complete Game
                   </Button>
                 )}
               </div>
@@ -405,25 +444,25 @@ export function HostControlRoom() {
 
           {/* Completed */}
           {phase === 'COMPLETED' && (
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4">🏆</div>
-              <h2 className="text-3xl font-black mb-2">Game Over!</h2>
+            <div className="text-center py-12 my-auto">
+              <div className="text-7xl mb-4">🏆</div>
+              <h2 className="text-4xl font-black mb-2">Game Complete!</h2>
+              <p className="text-[var(--text2)] mb-8">Congratulations to all participants!</p>
               <Leaderboard roomId={room.roomId} currentPlayerUid={null} final />
             </div>
           )}
         </main>
 
         {/* Sidebar — player list */}
-        <aside className="w-72 bg-[var(--surface)] border-l border-[var(--border)] p-4 overflow-y-auto hidden lg:block">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text2)] mb-3">Players ({players.length})</h3>
-          <ul className="flex flex-col gap-1">
+        <aside className="w-80 bg-[var(--surface)] border-l border-[var(--border)] p-5 overflow-y-auto hidden lg:block">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text2)] mb-4">Connected Players ({players.length})</h3>
+          <ul className="flex flex-col gap-2">
             {players.filter(p => p.status === 'active').map(p => (
-              <li key={p.playerUid} className="flex items-center gap-2 text-sm py-1.5 px-2 rounded-lg hover:bg-[var(--surface2)]">
-                <span className="flex-1 truncate font-medium">{p.displayName}</span>
-                <span className="text-[var(--text2)] text-xs">{p.totalScore}</span>
-                {p.lateJoiner && <span title="Late joiner" className="text-xs">⏰</span>}
+              <li key={p.playerUid} className="flex items-center gap-2 text-sm py-2 px-3 rounded-xl bg-[var(--surface2)] border border-[var(--border)]">
+                <span className="flex-1 truncate font-semibold">{p.displayName}</span>
+                <span className="font-mono font-bold text-xs bg-[var(--bg)] px-2 py-0.5 rounded-md">{p.totalScore} pts</span>
                 <button
-                  className="text-[var(--red)] text-xs hover:opacity-80"
+                  className="p-1 rounded text-[var(--red)] hover:bg-red-500/10 text-xs font-bold"
                   onClick={() => void callFn('removePlayer', { roomId: room.roomId, playerUid: p.playerUid })}
                   aria-label={`Remove ${p.displayName}`}
                   title="Remove player"
@@ -431,7 +470,7 @@ export function HostControlRoom() {
                   ✕
                 </button>
                 <button
-                  className="text-[var(--accent)] text-xs hover:opacity-80"
+                  className="p-1 rounded text-[var(--accent)] hover:bg-indigo-500/10 text-xs font-bold"
                   onClick={() => { setAdjustTarget(p); setAdjustAmount(0); setAdjustReason('') }}
                   aria-label={`Adjust score for ${p.displayName}`}
                   title="Adjust score"
@@ -474,26 +513,26 @@ export function HostControlRoom() {
       {/* Score adjustment modal */}
       {adjustTarget && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[var(--radius)] p-6 w-full max-w-sm">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 w-full max-w-sm shadow-2xl">
             <h2 className="text-lg font-bold mb-4">Adjust Score — {adjustTarget.displayName}</h2>
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-4">
               <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text2)] block mb-1">Amount (+ or -)</label>
+                <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text2)] block mb-1.5">Amount (+ or -)</label>
                 <input
                   type="number"
                   value={adjustAmount}
                   onChange={e => setAdjustAmount(Number(e.target.value))}
-                  className="w-full bg-[var(--surface2)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)]"
+                  className="w-full bg-[var(--surface2)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-[var(--text)] outline-none focus:border-[var(--accent)]"
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text2)] block mb-1">Reason *</label>
+                <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text2)] block mb-1.5">Reason *</label>
                 <input
                   type="text"
                   value={adjustReason}
                   onChange={e => setAdjustReason(e.target.value)}
                   maxLength={200}
-                  className="w-full bg-[var(--surface2)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)]"
+                  className="w-full bg-[var(--surface2)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-[var(--text)] outline-none focus:border-[var(--accent)]"
                   placeholder="e.g. Technical issue"
                 />
               </div>
