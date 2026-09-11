@@ -4,7 +4,7 @@ import { z } from 'zod'
 
 const ChoiceSchema = z.object({
   choiceKey:   z.string().min(1),
-  choiceOrder: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  choiceOrder: z.number().int().positive(),
   choiceText:  z.string().min(1).max(300),
 })
 
@@ -25,7 +25,7 @@ const QuestionSchema = z.object({
   correctChoiceKey:  z.string().min(1),
   isTiebreaker:      z.boolean(),
   active:            z.boolean(),
-  choices:           z.array(ChoiceSchema).length(3),
+  choices:           z.array(ChoiceSchema).min(2),
 })
 
 const RoundSchema = z.object({
