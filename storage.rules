@@ -1,0 +1,43 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isImageFile() {
+      return request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+
+    function isUnderSizeLimit() {
+      // 5 MB per image
+      return request.resource.size <= 5 * 1024 * 1024;
+    }
+
+    // ── Published game assets ─────────────────────────────────────────────────
+    // Public read — game images are not sensitive
+    match /game-assets/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin() && isImageFile() && isUnderSizeLimit();
+      allow delete: if isAdmin();
+    }
+
+    // ── Import staging ────────────────────────────────────────────────────────
+    // Public read — game images uploaded to staging are not sensitive
+    match /import-staging/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Deny everything else
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

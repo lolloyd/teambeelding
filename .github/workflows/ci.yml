@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint-test-build:
+    name: Lint · Typecheck · Test · Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Lint (frontend)
+        run: npm run lint
+
+      - name: Type check (frontend)
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build (frontend)
+        env:
+          VITE_FIREBASE_API_KEY: placeholder
+          VITE_FIREBASE_AUTH_DOMAIN: placeholder.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: placeholder
+          VITE_FIREBASE_STORAGE_BUCKET: placeholder.appspot.com
+          VITE_FIREBASE_MESSAGING_SENDER_ID: "000000000000"
+          VITE_FIREBASE_APP_ID: "1:000000000000:web:placeholder"
+          VITE_USE_EMULATORS: "false"
+        run: npm run build
+
+      - name: Install Functions dependencies
+        run: cd functions && npm ci
+
+      - name: Type check (Functions)
+        run: cd functions && npm run typecheck
+
+      - name: Build Functions
+        run: cd functions && npm run build

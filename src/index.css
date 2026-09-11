@@ -1,0 +1,73 @@
+﻿@import "tailwindcss";
+
+/* == Design tokens - light theme (default) ================================= */
+:root {
+  --bg:        #f4f5f8;
+  --surface:   #ffffff;
+  --surface2:  #f0f1f5;
+  --border:    #e2e4ec;
+  --accent:    #6c63ff;
+  --accent2:   #ff6584;
+  --green:     #22c55e;
+  --yellow:    #eab308;
+  --red:       #ef4444;
+  --text:      #1e1e2e;
+  --text2:     #6b7280;
+  --radius:    14px;
+  --shadow:    0 4px 24px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 48px rgba(0,0,0,0.12);
+}
+
+/* == Dark theme ============================================================= */
+.dark,[data-theme="dark"] {
+  --bg:        #0f1117;
+  --surface:   #1a1d27;
+  --surface2:  #232737;
+  --border:    #2e3347;
+  --green:     #43d98f;
+  --yellow:    #f5c542;
+  --red:       #ff5c5c;
+  --text:      #e8eaf6;
+  --text2:     #8b92b5;
+  --shadow:    0 4px 32px rgba(0,0,0,0.45);
+  --shadow-lg: 0 8px 60px rgba(0,0,0,0.6);
+}
+
+/* == Base ================================================================== */
+*,*::before,*::after{box-sizing:border-box;}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;margin:0;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px;}
+
+/* == Animations ============================================================= */
+@keyframes slideIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideInRight{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+@keyframes slideInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{from{opacity:1}to{opacity:0.5}}
+@keyframes bounceIn{0%{transform:scale(0.8);opacity:0}60%{transform:scale(1.05);opacity:1}100%{transform:scale(1)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes timerPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+
+.animate-slide-in{animation:slideIn 0.25s ease;}
+.animate-slide-in-right{animation:slideInRight 0.25s ease;}
+.animate-slide-in-up{animation:slideInUp 0.3s ease;}
+.animate-bounce-in{animation:bounceIn 0.4s cubic-bezier(.34,1.56,.64,1);}
+.animate-spin{animation:spin 1s linear infinite;}
+.animate-timer-pulse{animation:timerPulse 0.5s ease infinite;}
+.animate-pulse-danger{animation:pulse 0.5s ease infinite alternate;}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;}
+}
+
+/* == Semantic helpers ======================================================= */
+.bg-surface{background-color:var(--surface);}
+.bg-surface2{background-color:var(--surface2);}
+.bg-page{background-color:var(--bg);}
+.text-default{color:var(--text);}
+.text-muted{color:var(--text2);}
+.border-base{border-color:var(--border);}
+.text-accent{color:var(--accent);}
+.bg-accent{background-color:var(--accent);}

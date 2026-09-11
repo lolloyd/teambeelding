@@ -1,0 +1,139 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.admin == true;
+    }
+
+    function isAnonymous() {
+      return isAuthenticated() && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+
+    function isRoomHost(roomId) {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid == request.auth.uid;
+    }
+
+    function isRoomParticipant(roomId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/rooms/$(roomId)/players/$(request.auth.uid));
+    }
+
+    function roomNotExpired(roomId) {
+      let expiresAt = get(/databases/$(database)/documents/rooms/$(roomId)).data.expiresAt;
+      return expiresAt == null || expiresAt > request.time;
+    }
+
+    // ── App Config (public read) ──────────────────────────────────────────────
+    match /appConfig/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── Games (Admin manages; anyone can read published) ─────────────────────
+    match /games/{gameId} {
+      allow read: if resource.data.published == true || isAdmin();
+      allow write: if false; // All writes via Cloud Functions only
+
+      match /rounds/{roundId} {
+        allow read: if get(/databases/$(database)/documents/games/$(gameId)).data.published == true || isAdmin();
+        allow write: if false;
+
+        match /questions/{questionId} {
+          allow read: if get(/databases/$(database)/documents/games/$(gameId)).data.published == true || isAdmin();
+          allow write: if false;
+        }
+
+        // Answer keys — Admin only, never exposed to players or GMs
+        match /answerKeys/{questionId} {
+          allow read: if isAdmin();
+          allow write: if false;
+        }
+      }
+    }
+
+    // ── Room code lookup (read by anyone trying to join) ─────────────────────
+    match /roomCodes/{code} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    // ── Rooms ─────────────────────────────────────────────────────────────────
+    match /rooms/{roomId} {
+      // Host can read full room; participants can read public fields
+      allow read: if isAuthenticated() &&
+        (isRoomHost(roomId) || isRoomParticipant(roomId));
+      allow write: if false; // All writes via Cloud Functions only
+
+      // Public question snapshots (no answer keys)
+      match /questions/{questionInstanceId} {
+        allow read: if isAuthenticated() &&
+          (isRoomHost(roomId) || isRoomParticipant(roomId)) &&
+          roomNotExpired(roomId);
+        allow write: if false;
+      }
+
+      // Private question data (answer keys) — host only, revealed after ANSWER_REVEAL
+      match /privateQuestions/{questionInstanceId} {
+        allow read: if isRoomHost(roomId);
+        allow write: if false;
+      }
+
+      // Players — host and all room participants can read (leaderboard needs all players)
+      match /players/{playerUid} {
+        allow read: if isAuthenticated() &&
+          (isRoomHost(roomId) || isRoomParticipant(roomId));
+        allow write: if false;
+      }
+
+      // Name reservations — deny all direct access
+      match /nameReservations/{normalizedName} {
+        allow read, write: if false;
+      }
+
+      // Submissions — player can read their own; allow resource==null (doc not yet created)
+      match /submissions/{submissionId} {
+        allow read: if isAuthenticated() &&
+          (resource == null || resource.data.playerUid == request.auth.uid);
+        allow write: if false; // Written by submitAnswer Cloud Function only
+      }
+
+      // Private results — player can always read their own; host can read all
+      match /privateResults/{resultId} {
+        allow read: if isAuthenticated() &&
+          (isRoomHost(roomId) || resource.data.playerUid == request.auth.uid);
+        allow write: if false;
+      }
+
+      // Score adjustments — host can read/write audit trail via function
+      match /scoreAdjustments/{adjustmentId} {
+        allow read: if isRoomHost(roomId);
+        allow write: if false;
+      }
+
+      // Round summaries — host and participants can read
+      match /roundSummaries/{summaryId} {
+        allow read: if isAuthenticated() &&
+          (isRoomHost(roomId) || isRoomParticipant(roomId));
+        allow write: if false;
+      }
+    }
+
+    // ── Import staging (Admin only) ───────────────────────────────────────────
+    match /importStaging/{importId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
