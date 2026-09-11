@@ -2,6 +2,7 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import * as admin from 'firebase-admin'
 import { createRoomFn }        from './rooms/createRoom'
+import { createRoomFromDeckFn } from './rooms/createRoomFromDeck'
 import { joinRoomFn }          from './rooms/joinRoom'
 import { startGameFn }         from './gameplay/startGame'
 import { startQuestionFn }     from './gameplay/startQuestion'
@@ -26,6 +27,7 @@ admin.initializeApp()
 const callable = { cors: true, invoker: 'public' } as const
 
 export const createRoom          = onCall(callable, createRoomFn)
+export const createRoomFromDeck  = onCall(callable, createRoomFromDeckFn)
 export const joinRoom            = onCall(callable, joinRoomFn)
 export const startGame           = onCall(callable, startGameFn)
 export const startQuestion       = onCall(callable, startQuestionFn)

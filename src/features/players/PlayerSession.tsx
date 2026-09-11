@@ -111,18 +111,21 @@ export function PlayerSession() {
           })
         }
       })
-      .catch(() => {}) // silently ignore (may not be revealed yet)
+      .catch(() => {}) // silently ignore
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room?.phase, roomId, user?.uid, room?.currentQuestionInstanceId])
 
   // Timer
   useEffect(() => {
-    if (!question?.closesAt || room?.phase !== 'QUESTION_OPEN' || question.phase !== 'QUESTION_OPEN') { setRemainingMs(null); return }
+    if (!question?.closesAt || room?.phase !== 'QUESTION_OPEN' || question?.phase !== 'QUESTION_OPEN') {
+      setRemainingMs(null)
+      return
+    }
     const tick = () => setRemainingMs(Math.max(0, question.closesAt! - Date.now()))
     tick()
-    const id = setInterval(tick, 250)
+    const id = setInterval(tick, 100)
     return () => clearInterval(id)
-  }, [question?.closesAt, room?.phase])
+  }, [question?.closesAt, question?.phase, room?.phase])
 
   const submitAnswer = useCallback(async (choiceKey: string) => {
     if (locked || submitting || !roomId || !user || !question || !room) return
@@ -165,72 +168,80 @@ export function PlayerSession() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[radial-gradient(ellipse_at_50%_80%,_var(--surface)_0%,_var(--bg)_60%)]">
+    <div className="min-h-screen flex flex-col bg-[radial-gradient(ellipse_at_50%_80%,_var(--surface)_0%,_var(--bg)_60%)] text-[var(--text)]">
       {/* Top bar */}
-      <header className="bg-[var(--surface)] border-b border-[var(--border)] px-4 py-3 flex items-center gap-3">
-        <span className="font-bold truncate">{me.displayName}</span>
-        <span className="ml-auto text-sm text-[var(--text2)]">
-          Score: <strong className="text-[var(--yellow)]">{me.totalScore.toLocaleString()}</strong>
-        </span>
-        {room.currentSequenceIndex >= 0 && (
-          <span className="text-xs text-[var(--text2)]">
-            Q {room.currentSequenceIndex + 1}/{room.totalQuestions}
+      <header className="bg-[var(--surface)] border-b border-[var(--border)] px-4 py-3 flex items-center justify-between gap-3 shadow-md">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-extrabold text-base truncate">{me.displayName}</span>
+        </div>
+        <div className="flex items-center gap-3 text-sm">
+          <span className="bg-[var(--surface2)] border border-[var(--border)] px-3 py-1 rounded-xl text-xs font-semibold">
+            Score: <strong className="text-[var(--yellow)] text-sm">{me.totalScore.toLocaleString()}</strong>
           </span>
-        )}
-        <Button variant="ghost" size="sm" onClick={() => navigate('/')}>Leave</Button>
+          {room.currentSequenceIndex >= 0 && (
+            <span className="text-xs text-[var(--text2)] font-semibold hidden sm:inline">
+              Q {room.currentSequenceIndex + 1}/{room.totalQuestions}
+            </span>
+          )}
+          <Button variant="ghost" size="sm" onClick={() => navigate('/')}>Leave</Button>
+        </div>
       </header>
 
-      <main className="flex-1 flex flex-col items-center justify-start pt-4 px-4 gap-4 max-w-lg mx-auto w-full">
-        {/* Status message */}
-        <p
+      <main className="flex-1 flex flex-col items-center justify-start py-6 px-4 gap-5 max-w-lg mx-auto w-full">
+        {/* Status banner */}
+        <div
           className={[
-            'text-center font-semibold text-base min-h-[1.6em]',
-            locked ? 'text-[var(--green)]' : phase === 'QUESTION_OPEN' ? 'text-[var(--green)]' : 'text-[var(--text2)]',
+            'w-full py-3 px-4 rounded-2xl text-center font-bold text-base shadow-sm border transition-all',
+            locked ? 'bg-emerald-500/10 border-[var(--green)] text-emerald-300' :
+            phase === 'QUESTION_OPEN' ? 'bg-indigo-500/10 border-[var(--accent)] text-indigo-300' :
+            phase === 'ANSWER_REVEAL' && revealed?.correct ? 'bg-emerald-500/20 border-[var(--green)] text-emerald-200 text-lg' :
+            phase === 'ANSWER_REVEAL' && !revealed?.correct ? 'bg-rose-500/20 border-[var(--red)] text-rose-200 text-lg' :
+            'bg-[var(--surface2)] border-[var(--border)] text-[var(--text2)]',
           ].join(' ')}
           aria-live="polite"
         >
           {phase === 'LOBBY'             && 'Waiting for the Game Master to start…'}
           {phase === 'BETWEEN_QUESTIONS' && 'Get ready for the next question!'}
-          {phase === 'QUESTION_OPEN'     && !locked && '⚡ Tap an answer!'}
-          {phase === 'QUESTION_OPEN'     && locked  && '✅ Answer locked in!'}
-          {phase === 'QUESTION_PAUSED'   && '⏸ Paused…'}
-          {phase === 'QUESTION_CLOSED'   && '\u23F1 Time\u2019s up!'}
+          {phase === 'QUESTION_OPEN'     && !locked && '⚡ Tap your answer below!'}
+          {phase === 'QUESTION_OPEN'     && locked  && '✅ Answer locked in! Waiting for time…'}
+          {phase === 'QUESTION_PAUSED'   && '⏸ Game paused by Game Master'}
+          {phase === 'QUESTION_CLOSED'   && '⏰ Time’s up!'}
           {phase === 'ANSWER_REVEAL'     && revealed && (revealed.correct ? `🎉 Correct! +${revealed.points} pts` : '❌ Incorrect')}
-          {phase === 'ANSWER_REVEAL'     && !revealed && 'Answer incoming…'}
-          {phase === 'LEADERBOARD'       && '📊 Leaderboard'}
+          {phase === 'ANSWER_REVEAL'     && !revealed && 'Calculating results…'}
+          {phase === 'LEADERBOARD'       && '📊 Current Leaderboard'}
           {phase === 'COMPLETED'         && '🏆 Game Over!'}
-        </p>
+        </div>
 
         {/* Timer */}
         {timerSeconds !== null && (
           <div
             className={[
-              'text-5xl font-black font-mono tabular-nums',
-              timerSeconds <= 5 ? 'text-[var(--red)] animate-pulse-danger' : timerSeconds <= 10 ? 'text-[var(--yellow)]' : 'text-[var(--text)]',
+              'text-5xl font-black font-mono tabular-nums px-6 py-2 rounded-2xl bg-[var(--surface)] border shadow-md',
+              timerSeconds <= 5 ? 'text-[var(--red)] border-[var(--red)] animate-bounce' : timerSeconds <= 10 ? 'text-[var(--yellow)] border-[var(--yellow)]' : 'text-[var(--text)] border-[var(--border)]',
             ].join(' ')}
             aria-live="polite"
             aria-label={`${timerSeconds} seconds remaining`}
           >
-            {timerSeconds}
+            {timerSeconds}s
           </div>
         )}
 
         {/* Question content */}
         {question && (phase === 'QUESTION_OPEN' || phase === 'QUESTION_PAUSED' || phase === 'QUESTION_CLOSED' || phase === 'ANSWER_REVEAL') && (
-          <div className="w-full bg-[var(--surface)] border border-[var(--border)] rounded-[var(--radius)] p-4">
-            {question.gameType === 'GUESS_THE_PICTURE' && question.imageStorageUrl && (
+          <div className="w-full bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 shadow-lg">
+            {question.imageStorageUrl && (
               <StorageImage
                 storageUrl={question.imageStorageUrl}
-                alt="Question"
-                className="max-h-48 mx-auto rounded-xl object-contain mb-3"
+                alt="Question image"
+                className="max-h-56 mx-auto rounded-xl object-contain mb-4 shadow-sm"
               />
             )}
-            {question.gameType === 'NAME_THE_SONG' && question.lyricExcerpt && (
-              <blockquote className="italic text-center text-[var(--text2)] border-l-4 border-[var(--accent)] pl-3 py-1 mb-3 text-sm">
+            {question.lyricExcerpt && (
+              <blockquote className="italic text-center text-[var(--text2)] border-l-4 border-[var(--accent)] pl-3 py-1.5 mb-4 text-sm bg-[var(--surface2)] rounded-r-lg">
                 "{question.lyricExcerpt}"
               </blockquote>
             )}
-            <p className="text-center font-semibold">{question.prompt}</p>
+            <p className="text-center font-bold text-lg sm:text-xl leading-snug">{question.prompt}</p>
           </div>
         )}
 
@@ -248,20 +259,22 @@ export function PlayerSession() {
                   disabled={!canAnswer || phase !== 'QUESTION_OPEN'}
                   aria-pressed={isSelected}
                   className={[
-                    'w-full px-5 py-4 rounded-[var(--radius)] text-base font-bold text-left',
+                    'w-full px-5 py-4 rounded-2xl text-base font-bold text-left shadow-md',
                     'border-2 transition-all duration-150 select-none touch-manipulation',
                     'focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2',
-                    isCorrect ? 'border-[var(--green)] bg-[rgba(67,217,143,.2)] text-[var(--text)]' :
-                    isWrong   ? 'border-[var(--red)]   bg-[rgba(255,92,92,.15)] text-[var(--text)]' :
-                    isSelected && locked ? 'border-[var(--accent)] bg-[rgba(108,99,255,.15)] text-[var(--text)]' :
-                    canAnswer ? 'border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)] hover:-translate-y-0.5 active:scale-[.97]' :
+                    isCorrect ? 'border-[var(--green)] bg-emerald-500/20 text-emerald-200' :
+                    isWrong   ? 'border-[var(--red)]   bg-rose-500/20 text-rose-200' :
+                    isSelected && locked ? 'border-[var(--accent)] bg-indigo-500/20 text-white' :
+                    canAnswer ? 'border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)] hover:-translate-y-0.5 active:scale-[.98]' :
                     'border-[var(--border)] bg-[var(--surface2)] text-[var(--text2)] cursor-not-allowed opacity-70',
                   ].join(' ')}
                 >
-                  {isCorrect && <span aria-hidden="true">✅ </span>}
-                  {isWrong   && <span aria-hidden="true">❌ </span>}
-                  {isSelected && locked && phase !== 'ANSWER_REVEAL' && <span aria-hidden="true">🔒 </span>}
-                  {c.choiceText}
+                  <div className="flex items-center justify-between">
+                    <span>{c.choiceText}</span>
+                    {isCorrect && <span className="text-xl">✅</span>}
+                    {isWrong   && <span className="text-xl">❌</span>}
+                    {isSelected && locked && phase !== 'ANSWER_REVEAL' && <span className="text-xl">🔒</span>}
+                  </div>
                 </button>
               )
             })}
